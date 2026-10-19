@@ -70,5 +70,4 @@ error, so the output can be redirected to a file directly.
 
 ## License
 
-The upstream repository does not include a licence yet. Until that is
-resolved, no licence is granted here.
+No licence has been specified, by the original authors or here.

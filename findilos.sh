@@ -53,6 +53,14 @@ function parseiloxml {
   fi
 }
 
+function fetch_iloxml {
+  # try HTTP first, then HTTPS (iLO certificates are usually self-signed)
+  if ! curl --proxy "" --fail --silent --max-time 3 "http://$1/xmldata?item=$2" > "$iloxml" 2>/dev/null \
+     || [ ! -s "$iloxml" ]; then
+    curl --proxy "" --fail --silent --insecure --max-time 3 "https://$1/xmldata?item=$2" > "$iloxml" 2>/dev/null
+  fi
+}
+
 function is_installed {
   if ! command -v "$1" > /dev/null 2>&1
   then
@@ -96,6 +104,8 @@ iLO-4 ASIC: 12
 iLO-4 ASIC: 16
 iLO-5 ASIC: 19
 iLO-5 ASIC: 21
+iLO-6 ASIC: 27
+iLO-6 ASIC: 28
 i-iLO T0
 EOF
 
@@ -134,7 +144,7 @@ while read -r iloip <&3 ; do
   #
   # attempt to read the xmldata from iLO, no password required
   #
-  curl --proxy "" --fail --silent --max-time 3 "http://$iloip/xmldata?item=All" > "$iloxml"
+  fetch_iloxml "$iloip" All
 
   #
   # parse out the Server model (server product name)
@@ -163,7 +173,7 @@ while read -r iloip <&3 ; do
   fi
 
   # add start
-  curl --proxy "" --fail --silent --max-time 3 "http://$iloip/xmldata?item=CpqKey" > "$iloxml"
+  fetch_iloxml "$iloip" CpqKey
   parseiloxml LNAME; ilomodel=$parsedstring
   parseiloxml KEY; ilokey=$parsedstring
   # add end

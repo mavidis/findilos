@@ -3,7 +3,16 @@
 findilos was written by iggy (iggy@nachotech.com, http://blog.nachotech.com).
 Every version below builds on that original work.
 
-## 2.0 (unreleased)
+## 2.1
+
+- New `-c` option: compares each iLO's firmware with the latest known
+  version for its generation (list from pingtool.org, 2026-08-02) and shows
+  the newer version or "up to date". In CSV and JSON this adds
+  `ilo_fw_latest`.
+- iLO 7 is known to the firmware list. Its generation is read from the
+  product name like other iLOs.
+
+## 2.0 (2026-10-19)
 
 - iLOs are queried in parallel (`-j`, default 16). The results are still
   printed in scan order.

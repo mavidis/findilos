@@ -4,7 +4,7 @@
 #            The iLO is the Integrated Lights-Out management processor
 #            used on HP ProLiant and BladeSystem servers
 #
-scriptversion="2.0"
+scriptversion="2.1"
 #
 # Author: iggy@nachotech.com - the original findilos (1.0)
 #
@@ -14,7 +14,7 @@ scriptversion="2.0"
 #   osakanataro (https://github.com/osakanataro/findilos)
 #     - iLO 3, 4 and 5 support, licence key output (1.1, 1.2)
 #   mavidis (https://github.com/mavidis/findilos)
-#     - fixes, HTTPS, iLO 6, parallel queries, csv/json output (1.3, 2.0)
+#     - fixes, HTTPS, iLO 6, parallel queries, csv/json output, firmware check (1.3-2.1)
 #   See CHANGELOG.md for details.
 #
 # Requires: bash 4.3+, tr sed awk curl nmap mktemp
@@ -43,6 +43,15 @@ ilohwvers="$tmpdir/ilohwvers"
 format="table"
 declare -i maxjobs=16
 ports="17988"
+checkfw=0
+
+# latest iLO firmware per generation, for -c
+# source: https://pingtool.org/latest-hp-ilo-firmwares/ (updated 2026-08-02)
+fwlatestdate="2026-08-02"
+declare -A fwlatest=(
+  [iLO-1]="1.96" [iLO-2]="2.33" [iLO-3]="1.94" [iLO-4]="2.82"
+  [iLO-5]="3.21" [iLO-6]="1.78" [iLO-7]="1.24"
+)
 
 # FUNCTIONS
 
@@ -89,12 +98,13 @@ is_installed nmap
 
 function usage {
   printf "%s %s ( http://blog.nachotech.com/ )\n" "$scriptname" "$scriptversion"
-  printf "Usage: %s [-f table|csv|json] [-j jobs] [-p ports] {target network specification}\n" "$scriptname"
+  printf "Usage: %s [-f table|csv|json] [-j jobs] [-p ports] [-c] {target network specification}\n" "$scriptname"
   printf "OPTIONS:\n"
   printf "  -f FORMAT  output format: table (default), csv or json\n"
   printf "  -j JOBS    number of iLOs queried in parallel (default 16)\n"
   printf "  -p PORTS   ports to scan, comma separated (default 17988, the iLO virtual media port)\n"
   printf "             with other ports, only hosts that answer as an iLO are listed\n"
+  printf "  -c         compare firmware with the latest known version (list from %s)\n" "$fwlatestdate"
   printf "TARGET NETWORK SPECIFICATION:\n"
   printf "  Can pass hostnames, IP addresses, networks, etc.\n"
   printf "  Ex: server1.company.com, company.com/24, 192.168.0.1/16, 10.0.0-255.1-254\n"
@@ -149,6 +159,28 @@ function query_ilo {
   printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$iloip" "$ilohwver" "$ilofirmware" "$sernum" "$servermodel" "$ilomodel" "$ilokey"
 }
 
+#
+# print the newer firmware version when the iLO runs an older one,
+# "up to date" when it does not, and "unknown" when we cannot tell
+#
+
+function fw_status {
+  local latest=${fwlatest[$1]} fw=$2 oldest
+  if [ -z "$latest" ] || ! printf "%s" "$fw" | grep -qE '^[0-9]+(\.[0-9]+)*$'; then
+    echo "unknown"
+    return
+  fi
+  # 1.24.00 and 1.24 are the same version
+  fw=$(printf "%s" "$fw" | sed -E 's/(\.0+)+$//')
+  latest=$(printf "%s" "$latest" | sed -E 's/(\.0+)+$//')
+  oldest=$(printf "%s\n%s\n" "$fw" "$latest" | sort -V | head -n 1)
+  if [ "$fw" != "$latest" ] && [ "$oldest" = "$fw" ]; then
+    echo "$latest"
+  else
+    echo "up to date"
+  fi
+}
+
 function csv_field {
   # quote every field, doubling any quotes inside it
   printf '"%s"' "${1//\"/\"\"}"
@@ -161,11 +193,12 @@ function json_string {
 
 # parse options
 
-while getopts ":f:j:p:h" opt; do
+while getopts ":f:j:p:ch" opt; do
   case $opt in
     f) format=$OPTARG ;;
     j) maxjobs=$OPTARG ;;
     p) ports=$OPTARG ;;
+    c) checkfw=1 ;;
     *) usage ;;
   esac
 done
@@ -250,12 +283,22 @@ declare -i ilosfound=0
 
 case $format in
   table)
-    echo "--------------- ------ -------- ------------ ------------------------- -------------------- -----------------------------"
-    echo "iLO IP Address  iLO HW iLO FW   Server S/N   Server Model              iLO Edition          iLO Licence Key"
-    echo "--------------- ------ -------- ------------ ------------------------- -------------------- -----------------------------"
+    if [ "$checkfw" -eq 1 ]; then
+      echo "--------------- ------ -------- ---------- ------------ ------------------------- -------------------- -----------------------------"
+      echo "iLO IP Address  iLO HW iLO FW   Latest FW  Server S/N   Server Model              iLO Edition          iLO Licence Key"
+      echo "--------------- ------ -------- ---------- ------------ ------------------------- -------------------- -----------------------------"
+    else
+      echo "--------------- ------ -------- ------------ ------------------------- -------------------- -----------------------------"
+      echo "iLO IP Address  iLO HW iLO FW   Server S/N   Server Model              iLO Edition          iLO Licence Key"
+      echo "--------------- ------ -------- ------------ ------------------------- -------------------- -----------------------------"
+    fi
     ;;
   csv)
-    echo "ip,ilo_hw,ilo_fw,serial,model,ilo_edition,ilo_key"
+    if [ "$checkfw" -eq 1 ]; then
+      echo "ip,ilo_hw,ilo_fw,ilo_fw_latest,serial,model,ilo_edition,ilo_key"
+    else
+      echo "ip,ilo_hw,ilo_fw,serial,model,ilo_edition,ilo_key"
+    fi
     ;;
   json)
     printf "["
@@ -265,19 +308,28 @@ esac
 for ((i = 1; i <= n; i++)); do
   while IFS=$'\t' read -r iloip ilohwver ilofirmware sernum servermodel ilomodel ilokey; do
     ilosfound=$ilosfound+1
+    if [ "$checkfw" -eq 1 ]; then
+      fwstatus=$(fw_status "$ilohwver" "$ilofirmware")
+    fi
     case $format in
       table)
-        printf "%-15s %-6s %-8s %-12s %-25s %-20s %-30s\n" "$iloip" "$ilohwver" "$ilofirmware" "$sernum" "$servermodel" "$ilomodel" "$ilokey"
+        if [ "$checkfw" -eq 1 ]; then
+          printf "%-15s %-6s %-8s %-10s %-12s %-25s %-20s %-30s\n" "$iloip" "$ilohwver" "$ilofirmware" "$fwstatus" "$sernum" "$servermodel" "$ilomodel" "$ilokey"
+        else
+          printf "%-15s %-6s %-8s %-12s %-25s %-20s %-30s\n" "$iloip" "$ilohwver" "$ilofirmware" "$sernum" "$servermodel" "$ilomodel" "$ilokey"
+        fi
         ;;
       csv)
         csv_field "$iloip"; printf ","; csv_field "$ilohwver"; printf ","; csv_field "$ilofirmware"; printf ","
+        if [ "$checkfw" -eq 1 ]; then csv_field "$fwstatus"; printf ","; fi
         csv_field "$sernum"; printf ","; csv_field "$servermodel"; printf ","; csv_field "$ilomodel"; printf ","
         csv_field "$ilokey"; printf "\n"
         ;;
       json)
         if [ "$ilosfound" -gt 1 ]; then printf ","; fi
-        printf '\n  {"ip": %s, "ilo_hw": %s, "ilo_fw": %s, "serial": %s, "model": %s, "ilo_edition": %s, "ilo_key": %s}' \
-          "$(json_string "$iloip")" "$(json_string "$ilohwver")" "$(json_string "$ilofirmware")" "$(json_string "$sernum")" \
+        printf '\n  {"ip": %s, "ilo_hw": %s, "ilo_fw": %s,%s "serial": %s, "model": %s, "ilo_edition": %s, "ilo_key": %s}' \
+          "$(json_string "$iloip")" "$(json_string "$ilohwver")" "$(json_string "$ilofirmware")" \
+          "$( [ "$checkfw" -eq 1 ] && printf ' "ilo_fw_latest": %s,' "$(json_string "$fwstatus")" )" "$(json_string "$sernum")" \
           "$(json_string "$servermodel")" "$(json_string "$ilomodel")" "$(json_string "$ilokey")"
         ;;
     esac

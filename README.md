@@ -19,7 +19,7 @@ TCP connect scan.
 ## Usage
 
 ```
-findilos [-f table|csv|json] [-j jobs] [-p ports] TARGET
+findilos [-f table|csv|json] [-j jobs] [-p ports] [-c] TARGET
 ```
 
 | Option | Meaning | Default |
@@ -27,6 +27,7 @@ findilos [-f table|csv|json] [-j jobs] [-p ports] TARGET
 | `-f` | Output format: `table`, `csv` or `json` | `table` |
 | `-j` | How many iLOs are queried at the same time | `16` |
 | `-p` | Ports to scan, comma separated or ranges | `17988` |
+| `-c` | Add a "Latest FW" column: the newer firmware version, or `up to date` | off |
 
 `TARGET` is anything nmap accepts: hostnames, IP addresses, networks or
 ranges such as `server1.company.com`, `192.168.0.0/24` or
@@ -38,6 +39,7 @@ ranges such as `server1.company.com`, `192.168.0.0/24` or
 sudo ./findilos.sh 192.168.0.0/24
 sudo ./findilos.sh -f csv 10.0.0.0/22 > ilos.csv
 sudo ./findilos.sh -f json -p 17988,443 10.0.0.0/24
+sudo ./findilos.sh -c 10.0.0.0/24
 ```
 
 ```
@@ -60,6 +62,11 @@ error, so the output can be redirected to a file directly.
 - The `xmldata` endpoint is tried over HTTP first, then HTTPS. iLO
   certificates are usually self-signed, so the HTTPS request does not
   verify them.
+- `-c` compares against a list of the latest firmware per iLO generation
+  that is built into the script, taken from
+  https://pingtool.org/latest-hp-ilo-firmwares/ (2026-08-02). Newer
+  firmware released after that date is not known to the script. The list
+  is `fwlatest` near the top of `findilos.sh`.
 - The licence key is printed in clear text. Treat the output accordingly.
 
 ## How it works

@@ -6,13 +6,20 @@
 #
 scriptversion="2.0"
 #
-# Author: iggy@nachotech.com
+# Author: iggy@nachotech.com - the original findilos (1.0)
 #
 # Website: http://blog.nachotech.com
 #
-# Requires: tr sed curl nmap mktemp
+# Contributors:
+#   osakanataro (https://github.com/osakanataro/findilos)
+#     - iLO 3, 4 and 5 support, licence key output (1.1, 1.2)
+#   mavidis (https://github.com/mavidis/findilos)
+#     - fixes, HTTPS, iLO 6, parallel queries, csv/json output (1.3, 2.0)
+#   See CHANGELOG.md for details.
 #
-# Tested with: Nmap 4.20, curl 7.17.1, RHEL4
+# Requires: bash 4.3+, tr sed awk curl nmap mktemp
+#
+# Originally tested with: Nmap 4.20, curl 7.17.1, RHEL4
 #
 # Note: Discovery of an iLO is dependent upon the Virtual Media port
 #       being set to the default of 17988.  If this has been changed

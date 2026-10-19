@@ -62,11 +62,28 @@ error, so the output can be redirected to a file directly.
   verify them.
 - The licence key is printed in clear text. Treat the output accordingly.
 
+## How it works
+
+1. nmap scans the target for the iLO virtual media port, 17988 by default.
+2. Each host with that port open is asked for `/xmldata?item=All`, which
+   returns the server model, serial number and iLO firmware and hardware
+   revision without a password. It is asked over HTTP first, then HTTPS.
+3. `/xmldata?item=CpqKey` is read for the licence edition and key.
+4. The iLO generation is taken from the iLO product name, for example
+   "Integrated Lights-Out 5 (iLO 5)", or looked up from its ASIC revision
+   when the name does not include it.
+
 ## Credits
 
-- Original script by iggy (iggy@nachotech.com), http://blog.nachotech.com
-- iLO 3, 4 and 5 support and licence key output by
-  [osakanataro](https://github.com/osakanataro/findilos)
+findilos was written by **iggy** (iggy@nachotech.com,
+http://blog.nachotech.com). This fork exists because of that work, and the
+original author line is kept in the script.
+
+- [osakanataro](https://github.com/osakanataro/findilos) added iLO 3, 4 and 5
+  support and the licence key columns.
+- This fork adds fixes, HTTPS, iLO 6, parallel queries and CSV/JSON output.
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 ## License
 
